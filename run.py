@@ -1,7 +1,11 @@
 import os
-import cv2
 import rich
 from rich.table import Table
+import cv2
+import json
+import pickle
+import random
+import numpy as np
 from tqdm import tqdm
 from argparse import ArgumentParser
 from typing import Dict
@@ -47,6 +51,7 @@ def parse_args():
     console.log("[bold] ‣ Initializing... [/bold]")
     parser = ArgumentParser()
     parser.add_argument('--input-dir', type=str, default="data/input")
+    parser.add_argument('--output-dir', type=str, default="data/output")
     parser.add_argument('--vis-out-dir', type=str, default='data/output/vis')
     parser.add_argument('--pred-out-dir', type=str, default='data/output/pose')
     parser.add_argument('--pose2d', type=str, default=None)
@@ -122,6 +127,7 @@ def load_video_list(input_dir: str) -> list:
     
     return [os.path.join(input_dir, f) for f in video_files]
 
+
 def load_model(init_args: Dict[str, str]) -> MMPoseInferencer:
     console.log("[bold] ‣ Loading Model... [/bold]")
     inferencer = MMPoseInferencer(**init_args)
@@ -129,15 +135,127 @@ def load_model(init_args: Dict[str, str]) -> MMPoseInferencer:
     
     return inferencer
 
+
+def convert_annotation(video_path: str, pose_dir: str) -> list:
+    def convert_relative_coord(keypoints: list): # 상대 좌표값으로 변환
+        processed_keypoints = []
+        
+        for k in keypoints:
+            base_j = ((k[11][0] + k[12][0]) / 2, (k[11][1] + k[12][1]) / 2) # 기준점 (골반 중심점, COCO 17 keypoints: 11 = right hip, 12 = left hip)
+            base_l = np.linalg.norm(np.array(k[11]) - np.array(k[12])) # 기준 길이 (골반 중심점과 양쪽 엉덩이 사이의 거리)
+            processed_k = []
+            for j in k:
+                processed_k.append([(j[0] - base_j[0]) / base_l, (j[1] - base_j[1]) / base_l]) # 상대 좌표로 변환된 키포인트에 대한 일반화
+            processed_keypoints.append(processed_k)
+            
+        return processed_keypoints
+    
+    def load_pose(pose_path: str):
+        if not os.path.exists(pose_path):
+            return [], []
+        
+        with open(pose_path, 'r') as f:
+            data = json.load(f)
+            
+        max_person_num = 6
+        keypoints = [[] for _ in range(max_person_num)] # 최대 6명의 사람에 대한 키포인트
+        keypoint_scores = [[] for _ in range(max_person_num)] # 최대 6명의 사람에 대한 키포인트 정확도 점수
+
+        for frame in data:
+            pose = frame['instances']
+            k = [instance['keypoints'] for instance in pose]
+            k_r = convert_relative_coord(k)
+            k_s = [instance['keypoint_scores'] for instance in pose]
+            for i, c_k_r in enumerate(k_r):
+                if i < max_person_num:
+                    keypoints[i].append(c_k_r) # 상대 좌표로 변환된 키포인트를 추가
+            for i, c_k_s in enumerate(k_s):
+                if i < max_person_num:
+                    keypoint_scores[i].append(c_k_s)
+                    
+        processed_keypoints = []
+        processed_keypoint_scores = []
+                    
+        for p_k in keypoints:
+            if len(p_k) > 0:
+                processed_keypoints.append(np.array(p_k, dtype=np.float16))
+        for p_k_s in keypoint_scores:
+            if len(p_k_s) > 0:
+                processed_keypoint_scores.append(np.array(p_k_s, dtype=np.float16))
+
+        return processed_keypoints, processed_keypoint_scores
+    
+    annotation = {
+        'frame_dir': '', # 동영상 이름
+        'label': '', # 레이블
+        'img_shape': (0, 0), # 이미지 크기
+        'original_shape': (0, 0), # 원본 크기
+        'total_frames': 0, # 총 프레임 수
+        'keypoint': [], # 키포인트
+        'keypoint_score': [] # 키포인트 정확도 점수
+    }
+    
+    video_name = os.path.splitext(os.path.basename(video_path))[0]
+    video = cv2.VideoCapture(video_path)
+    resolution = (int(video.get(cv2.CAP_PROP_FRAME_WIDTH)), int(video.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+    total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    video.release()
+    annotation['frame_dir'] = video_name
+    annotation['img_shape'] = resolution
+    annotation['original_shape'] = resolution
+    annotation['total_frames'] = total_frames
+    
+    keypoints, keypoint_scores = load_pose(os.path.join(pose_dir, f'{video_name}.json'))
+    
+    annotations = []
+    
+    for k, k_s in zip(keypoints, keypoint_scores):
+        if len(k) > 0:
+            a = annotation.copy()
+            a['keypoint'] = (np.array([k], dtype=np.float16))
+            a['keypoint_score'] = (np.array([k_s], dtype=np.float16))
+            annotations.append(a)
+
+    return annotations
+
+
+def compress_dataset(video_list: list, pose_dir: str, output_dir: str) -> str:
+    dataset = {
+        'split': {
+            'train': [],
+            'val': [],
+        },
+        'annotations': []
+    }
+    
+    for video_path in video_list: # 동영상을 train: 8/val: 2로 분할
+        if random.random() < 0.8:
+            dataset['split']['train'].append(video_path)
+        else:
+            dataset['split']['val'].append(video_path)
+
+    for video_path in video_list:
+        annotations = convert_annotation(video_path, pose_dir)
+        dataset['annotations'].extend(annotations)
+    
+    dataset_path = os.path.join(output_dir, 'dataset.pkl')
+    pickle.dump(dataset, open(dataset_path, 'wb'))
+    
+    return dataset_path
+
 def main():
     console_banner() # Setting Progress
     init_args, call_args, display_alias = parse_args()    
     video_list = load_video_list(call_args['input_dir'])
     video_num = len(video_list)
     inferencer = load_model(init_args)
+    os.makedirs(call_args['output_dir'], exist_ok=True)
+    os.makedirs(call_args['pred_out_dir'], exist_ok=True)
+    os.makedirs(call_args['vis_out_dir'], exist_ok=True)
     
     console_banner() # Inferencing Progress
     console.log("[bold] ‣ Inferencing... [/bold]")
+    
     for video_idx, video_path in enumerate(video_list):
         cur_call_args = call_args.copy()
         cur_call_args['inputs'] = video_path
@@ -146,6 +264,11 @@ def main():
             pass
 
     console.log("[bold green] ∙ Inferencing completed [/bold green]")
+    
+    console_banner() # Compressing Progress
+    console.log("[bold] ‣ Compressing... [/bold]")
+    dataset = compress_dataset(video_list, call_args['pred_out_dir'], call_args['output_dir'])
+    console.log(f"[bold green] ∙ Compressing completed, {dataset} [/bold green]\n")
 
 if __name__ == '__main__':
     main()
