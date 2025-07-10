@@ -22,24 +22,28 @@
 **Step 1**. Conda 가상환경 생성 및 활성화
 
 ```bash
-conda create --name ngc-pipe-action python=3.10 -y
+conda create --name ngc-pipe-action python=3.8 -y
 conda activate ngc-pipe-action
 ```
 
-**Step 2**. PyTorch 설치 (\*GPU)
+**Step 2**. 라이브러리 설치
 
 ```bash
-conda install pytorch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 pytorch-cuda=12.1 -c pytorch -c nvidia -y
-pip install fsspec
+pip install -r requirements.txt
+pip install -v -e .
 ```
 
 **Step 3**. MMLab 라이브러리 설치
 
 ```bash
 pip install -U openmim
-mim install mmengine
-mim install mmcv==2.2.0
-mim install mmcv-full==1.7.2
+mim install mmengine==0.10.7
+mim install mmcv==2.1.0
 mim install mmdet==3.3.0
-mim install mmpose==1.3.1
+```
+
+## Demo
+
+```bash
+python run.py data/demo/demo.mp4 --pose2d rtmo
 ```
