@@ -219,7 +219,7 @@ def convert_annotation(video_path: str, pose_dir: str) -> list:
     return annotations
 
 
-def compress_dataset(video_list: list, pose_dir: str, output_dir: str) -> str:
+def compress_dataset(video_list: list, pose_dir: str, output_dir: str, model: str) -> str:
     dataset = {
         'split': {
             'train': [],
@@ -238,7 +238,7 @@ def compress_dataset(video_list: list, pose_dir: str, output_dir: str) -> str:
         annotations = convert_annotation(video_path, pose_dir)
         dataset['annotations'].extend(annotations)
     
-    dataset_path = os.path.join(output_dir, 'dataset.pkl')
+    dataset_path = os.path.join(output_dir, f'dataset_{model}.pkl')
     pickle.dump(dataset, open(dataset_path, 'wb'))
     
     return dataset_path
@@ -267,7 +267,7 @@ def main():
     
     console_banner() # Compressing Progress
     console.log("[bold] ‣ Compressing... [/bold]")
-    dataset = compress_dataset(video_list, call_args['pred_out_dir'], call_args['output_dir'])
+    dataset = compress_dataset(video_list, call_args['pred_out_dir'], call_args['output_dir'], init_args['pose2d'])
     console.log(f"[bold green] ∙ Compressing completed, {dataset} [/bold green]\n")
 
 if __name__ == '__main__':
