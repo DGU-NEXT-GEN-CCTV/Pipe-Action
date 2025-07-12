@@ -1,14 +1,15 @@
 import os
 import rich
-from rich.table import Table
 import cv2
+import csv
 import json
 import pickle
 import random
 import numpy as np
 from tqdm import tqdm
-from argparse import ArgumentParser
 from typing import Dict
+from rich.table import Table
+from argparse import ArgumentParser
 
 from mmpose.apis.inferencers import MMPoseInferencer, get_model_aliases      
 
@@ -54,7 +55,9 @@ def parse_args():
     parser.add_argument('--output-dir', type=str, default="data/output")
     parser.add_argument('--vis-out-dir', type=str, default='data/output/vis')
     parser.add_argument('--pred-out-dir', type=str, default='data/output/pose')
-    parser.add_argument('--pose2d', type=str, default=None)
+    parser.add_argument('--label', type=str, default='data/input/label.csv')
+    parser.add_argument('--label-map', type=str, default='data/input/label_map.txt')
+    parser.add_argument('--pose2d', type=str, default="rtmo")
     parser.add_argument('--pose2d-weights', type=str, default=None)
     parser.add_argument('--pose3d', type=str, default=None)
     parser.add_argument('--pose3d-weights', type=str, default=None)
@@ -127,6 +130,35 @@ def load_video_list(input_dir: str) -> list:
     
     return [os.path.join(input_dir, f) for f in video_files]
 
+def load_label(label_map_path: str, label_path: str):
+    console.log("[bold] ‣ Loading Labels... [/bold]")
+    if not os.path.exists(label_map_path):
+        raise FileNotFoundError(f"Label map file '{label_map_path}' does not exist.")
+    
+    if not os.path.exists(label_path):
+        raise FileNotFoundError(f"Label file '{label_path}' does not exist.")
+    
+    with open(label_map_path, 'r') as f:
+        label_map = f.read().splitlines()
+    
+    with open(label_path, 'r') as f:
+        reader = csv.reader(f)
+        label_dict = {}
+        for idx, row in enumerate(reader):
+            if len(row) < 2:
+                continue
+            video_name = row[0].strip()
+            label = row[1].strip()
+            if label in label_map:
+                label_dict[video_name] = label_map.index(label)
+            else:
+                console.log(f"[bold red] ∙ Error: Label '{label}' not found in label map (line: {idx + 1}, video name: {video_name}) [/bold red]")
+                raise ValueError(f"Label '{label}' not found in label map.")
+    
+    console.log(f"[bold green] ∙ Loaded {len(label_dict)} labels from '{label_path}' [/bold green]")
+    
+    return label_dict
+
 
 def load_model(init_args: Dict[str, str]) -> MMPoseInferencer:
     console.log("[bold] ‣ Loading Model... [/bold]")
@@ -136,7 +168,7 @@ def load_model(init_args: Dict[str, str]) -> MMPoseInferencer:
     return inferencer
 
 
-def convert_annotation(video_path: str, pose_dir: str) -> list:
+def convert_annotation(video_path: str, label_dict: dict, pose_dir: str) -> list:
     def convert_relative_coord(keypoints: list): # 상대 좌표값으로 변환
         processed_keypoints = []
         
@@ -187,7 +219,7 @@ def convert_annotation(video_path: str, pose_dir: str) -> list:
     
     annotation = {
         'frame_dir': '', # 동영상 이름
-        'label': '', # 레이블
+        'label': 0, # 레이블
         'img_shape': (0, 0), # 이미지 크기
         'original_shape': (0, 0), # 원본 크기
         'total_frames': 0, # 총 프레임 수
@@ -201,6 +233,7 @@ def convert_annotation(video_path: str, pose_dir: str) -> list:
     total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
     video.release()
     annotation['frame_dir'] = video_name
+    annotation['label'] = label_dict.get(video_name, 0) # 레이블이 없으면 0으로 설정
     annotation['img_shape'] = resolution
     annotation['original_shape'] = resolution
     annotation['total_frames'] = total_frames
@@ -219,7 +252,7 @@ def convert_annotation(video_path: str, pose_dir: str) -> list:
     return annotations
 
 
-def compress_dataset(video_list: list, pose_dir: str, output_dir: str, model: str) -> str:
+def compress_dataset(video_list: list, label_dict: dict, pose_dir: str, output_dir: str, model: str) -> str:
     dataset = {
         'split': {
             'train': [],
@@ -235,7 +268,7 @@ def compress_dataset(video_list: list, pose_dir: str, output_dir: str, model: st
             dataset['split']['val'].append(video_path)
 
     for video_path in video_list:
-        annotations = convert_annotation(video_path, pose_dir)
+        annotations = convert_annotation(video_path, label_dict, pose_dir)
         dataset['annotations'].extend(annotations)
     
     dataset_path = os.path.join(output_dir, f'dataset_{model}.pkl')
@@ -248,6 +281,7 @@ def main():
     init_args, call_args, display_alias = parse_args()    
     video_list = load_video_list(call_args['input_dir'])
     video_num = len(video_list)
+    label_dict = load_label(call_args['label_map'], call_args['label'])
     inferencer = load_model(init_args)
     os.makedirs(call_args['output_dir'], exist_ok=True)
     os.makedirs(call_args['pred_out_dir'], exist_ok=True)
@@ -267,7 +301,7 @@ def main():
     
     console_banner() # Compressing Progress
     console.log("[bold] ‣ Compressing... [/bold]")
-    dataset = compress_dataset(video_list, call_args['pred_out_dir'], call_args['output_dir'], init_args['pose2d'])
+    dataset = compress_dataset(video_list, label_dict, call_args['pred_out_dir'], call_args['output_dir'], init_args['pose2d'])
     console.log(f"[bold green] ∙ Compressing completed, {dataset} [/bold green]\n")
 
 if __name__ == '__main__':
