@@ -1,5 +1,4 @@
 import os
-import rich
 import cv2
 import csv
 import json
@@ -8,13 +7,11 @@ import random
 import numpy as np
 from tqdm import tqdm
 from typing import Dict
-from rich.table import Table
 from argparse import ArgumentParser
-
 from mmpose.apis.inferencers import MMPoseInferencer, get_model_aliases      
+from utils.logger import Logger
 
-console = rich.get_console()
-console = console.__class__(log_time=False)      
+logger = Logger()
 
 filter_args = dict(bbox_thr=0.3, nms_thr=0.3, pose_based_nms=False)
 POSE2D_SPECIFIC_ARGS = dict(
@@ -22,34 +19,8 @@ POSE2D_SPECIFIC_ARGS = dict(
     rtmo=dict(bbox_thr=0.1, nms_thr=0.65, pose_based_nms=True),
 )
 
-def console_banner():
-    console.clear()
-    banner = [
-        "\n",
-        "    ___       ___       ___       ___            ___       ___       ___            ___       ___       ___       ___    ",
-        "   /\__\     /\  \     /\__\     /\  \          /\  \     /\  \     /\__\          /\  \     /\  \     /\  \     /\__\   ",
-        "  /:| _|_   /::\  \   |::L__L    \:\  \        /::\  \   /::\  \   /:| _|_        /::\  \   /::\  \    \:\  \   /:/ _/_  ",
-        " /::|/\__\ /::\:\__\ /::::\__\   /::\__\      /:/\:\__\ /::\:\__\ /::|/\__\      /:/\:\__\ /:/\:\__\   /::\__\ |::L/\__\ ",
-        " \/|::/  / \:\:\/  / \;::;/__/  /:/\/__/      \:\:\/__/ \:\:\/  / \/|::/  /      \:\ \/__/ \:\ \/__/  /:/\/__/ |::::/  / ",
-        "   |:/  /   \:\/  /   |::|__|   \/__/          \::/  /   \:\/  /    |:/  /        \:\__\    \:\__\    \/__/     L;;/__/  ",
-        "   \/__/     \/__/     \/__/                    \/__/     \/__/     \/__/          \/__/     \/__/            ",
-        "\n",
-        "Pipe-Action: Pipeline for Preprocessing Video Datasets for Action Recognition Model Training (ProtoGCN)",
-        "\n",
-    ]
-    for line in banner:
-        console.print(line, style="bold green")
-        
-def console_args(args):
-    table = Table(show_header=True, show_footer=False)
-    table.add_column("Argument", width=17)
-    table.add_column("Value", width=40)
-    for arg, value in args.items():
-        table.add_row(arg, str(value))
-    console.print(table)
-
 def parse_args():
-    console.log("[bold] ‣ Initializing... [/bold]")
+    logger.log("[bold] ‣ Initializing... [/bold]")
     parser = ArgumentParser()
     parser.add_argument('--input-dir', type=str, default="data/input")
     parser.add_argument('--output-dir', type=str, default="data/output")
@@ -100,10 +71,10 @@ def parse_args():
 
     display_alias = call_args.pop('show_alias')
     
-    console.log(f"[bold green] ∙ Init Arguments[/bold green]")
-    console_args(init_args)
-    console.log(f"[bold green] ∙ Call Arguments[/bold green]")
-    console_args(call_args)
+    logger.log(f"[bold green] ∙ Init Arguments[/bold green]")
+    logger.console_args(init_args)
+    logger.log(f"[bold green] ∙ Call Arguments[/bold green]")
+    logger.console_args(call_args)
 
     return init_args, call_args, display_alias
 
@@ -117,7 +88,7 @@ def display_model_aliases(model_aliases: Dict[str, str]) -> None:
         
     
 def load_video_list(input_dir: str) -> list:
-    console.log("[bold] ‣ Loading Videos... [/bold]")
+    logger.log("[bold] ‣ Loading Videos... [/bold]")
     if not os.path.exists(input_dir):
         raise FileNotFoundError(f"Input directory '{input_dir}' does not exist.")
     
@@ -126,12 +97,12 @@ def load_video_list(input_dir: str) -> list:
     if not video_files:
         raise ValueError(f"No video files found in the input directory '{input_dir}'.")
     
-    console.log(f"[bold green] ∙ Found {len(video_files)} videos in '{input_dir}'[/bold green]")
+    logger.log(f"[bold green] ∙ Found {len(video_files)} videos in '{input_dir}'[/bold green]")
     
     return [os.path.join(input_dir, f) for f in video_files]
 
 def load_label(label_map_path: str, label_path: str):
-    console.log("[bold] ‣ Loading Labels... [/bold]")
+    logger.log("[bold] ‣ Loading Labels... [/bold]")
     if not os.path.exists(label_map_path):
         raise FileNotFoundError(f"Label map file '{label_map_path}' does not exist.")
     
@@ -152,18 +123,18 @@ def load_label(label_map_path: str, label_path: str):
             if label in label_map:
                 label_dict[video_name] = label_map.index(label)
             else:
-                console.log(f"[bold red] ∙ Error: Label '{label}' not found in label map (line: {idx + 1}, video name: {video_name}) [/bold red]")
+                logger.log(f"[bold red] ∙ Error: Label '{label}' not found in label map (line: {idx + 1}, video name: {video_name}) [/bold red]")
                 raise ValueError(f"Label '{label}' not found in label map.")
     
-    console.log(f"[bold green] ∙ Loaded {len(label_dict)} labels from '{label_path}' [/bold green]")
+    logger.log(f"[bold green] ∙ Loaded {len(label_dict)} labels from '{label_path}' [/bold green]")
     
     return label_dict
 
 
 def load_model(init_args: Dict[str, str]) -> MMPoseInferencer:
-    console.log("[bold] ‣ Loading Model... [/bold]")
+    logger.log("[bold] ‣ Loading Model... [/bold]")
     inferencer = MMPoseInferencer(**init_args)
-    console.log(f"[bold green] ∙ Model loaded[/bold green]")
+    logger.log(f"[bold green] ∙ Model loaded[/bold green]")
     
     return inferencer
 
@@ -277,7 +248,7 @@ def compress_dataset(video_list: list, label_dict: dict, pose_dir: str, output_d
     return dataset_path
 
 def main():
-    console_banner() # Setting Progress
+    logger.console_banner() # Setting Progress
     init_args, call_args, display_alias = parse_args()    
     video_list = load_video_list(call_args['input_dir'])
     video_num = len(video_list)
@@ -286,10 +257,10 @@ def main():
     os.makedirs(call_args['output_dir'], exist_ok=True)
     os.makedirs(call_args['pred_out_dir'], exist_ok=True)
     os.makedirs(call_args['vis_out_dir'], exist_ok=True)
-    
-    console_banner() # Inferencing Progress
-    console.log("[bold] ‣ Inferencing... [/bold]")
-    
+
+    logger.console_banner() # Inferencing Progress
+    logger.log("[bold] ‣ Inferencing... [/bold]")
+
     for video_idx, video_path in enumerate(video_list):
         cur_call_args = call_args.copy()
         cur_call_args['inputs'] = video_path
@@ -297,12 +268,12 @@ def main():
         for _ in tqdm(inferencer(**cur_call_args), total=total_frames, desc=f'[{video_idx + 1:04d}/{video_num:04d}] Processing {os.path.basename(video_path)}'):
             pass
 
-    console.log("[bold green] ∙ Inferencing completed [/bold green]")
-    
-    console_banner() # Compressing Progress
-    console.log("[bold] ‣ Compressing... [/bold]")
+    logger.log("[bold green] ∙ Inferencing completed [/bold green]")
+
+    logger.console_banner() # Compressing Progress
+    logger.log("[bold] ‣ Compressing... [/bold]")
     dataset = compress_dataset(video_list, label_dict, call_args['pred_out_dir'], call_args['output_dir'], init_args['pose2d'])
-    console.log(f"[bold green] ∙ Compressing completed, {dataset} [/bold green]\n")
+    logger.log(f"[bold green] ∙ Compressing completed, {dataset} [/bold green]\n")
 
 if __name__ == '__main__':
     main()
