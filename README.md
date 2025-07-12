@@ -61,6 +61,38 @@ mim install mmdet==3.3.0
 └── requirements        : 라이브러리 목록 디렉토리
 ```
 
+## Preparation
+
+이 모듈을 통해 데이터셋 형식으로 변환할 동영상 파일을 준비합니다. (`.mp4`, `.avi`, `.mov` 확장자의 동영상을 지원합니다.)
+
+라벨 적용을 위해 `label_map.txt`와 `label.csv`파일을 준비합니다.
+
+-   `label_map.txt`: 행동 라벨 목록
+
+    ex)
+
+    ```txt
+    normal
+    falldown
+    selfharm
+    ...
+    ```
+
+-   `label.csv`: 동영상 파일명(확장자를 포함한), 해당 동영상의 행동 라벨값(`label_map.txt`에 존재하는 행동 라벨만 사용)
+
+    ex)
+
+    ```csv
+    demo.mp4, normal
+    demo_1.mp4, falldown
+    demo_2.mp4, selfharm
+    ...
+    ```
+
+준비된 동영상과 `label_map.txt`, `label.csv`를 `data/input` 디렉토리에 위치시킵니다.
+
+모듈 실행 시, 데이터 처리에 필요한 디렉토리는 자동으로 생성됩니다. (`data/output`과 하위 디렉토리)
+
 ## Run
 
 데이터셋 구축을 위해 아래 명령어를 실행합니다.
