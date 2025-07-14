@@ -63,6 +63,8 @@ mim install mmdet==3.3.0
 
 ## Preparation
 
+> 이 모듈의 입력 동영상과 라벨 정보를 구성하기 위해 [`Pipe-Label`](https://github.com/DGU-NEXT-GEN-CCTV/Pipe-Label) 모듈을 황용합니다.
+
 이 모듈을 통해 데이터셋 형식으로 변환할 동영상 파일을 준비합니다. (`.mp4`, `.avi`, `.mov` 확장자의 동영상을 지원합니다.)
 
 라벨 적용을 위해 `label_map.txt`와 `label.csv`파일을 준비합니다.
