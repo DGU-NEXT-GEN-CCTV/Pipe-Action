@@ -21,21 +21,28 @@
 
 [🔗 아나콘다 다운로드](https://www.anaconda.com/download/success) 또는 [🔗 미니콘다 다운로드](https://www.anaconda.com/docs/getting-started/miniconda/main)
 
-**Step 1**. Conda 가상환경 생성 및 활성화
+**Step 1**. 저장소 복제
+
+```bash
+git clone https://github.com/DGU-NEXT-GEN-CCTV/Pipe-Action
+cd Pipe-Action
+```
+
+**Step 2**. Conda 가상환경 생성 및 활성화
 
 ```bash
 conda create --name ngc-pipe-action python=3.8 -y
 conda activate ngc-pipe-action
 ```
 
-**Step 2**. 라이브러리 설치
+**Step 3**. 라이브러리 설치
 
 ```bash
 pip install -r requirements.txt
 pip install -v -e .
 ```
 
-**Step 3**. MMLab 라이브러리 설치
+**Step 4**. MMLab 라이브러리 설치
 
 ```bash
 pip install -U openmim
