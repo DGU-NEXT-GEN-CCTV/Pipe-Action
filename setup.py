@@ -19,7 +19,7 @@ def readme():
     return content
 
 
-version_file = 'module/mmpose/version.py'
+version_file = 'mmpose/version.py'
 
 
 def get_version():
